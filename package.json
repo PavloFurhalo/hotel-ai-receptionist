@@ -1,0 +1,32 @@
+{
+  "name": "hotel-ai-receptionist",
+  "version": "0.1.0",
+  "description": "V1.2 Ukrainian hotel AI receptionist prototype (Twilio + OpenAI Realtime)",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/**/*.test.js"
+  },
+  "keywords": [
+    "twilio",
+    "openai",
+    "voice",
+    "hotel",
+    "ukrainian"
+  ],
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/websocket": "^11.3.0",
+    "@openai/agents": "^0.14.3",
+    "@openai/agents-extensions": "^0.14.3",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.11.2",
+    "zod": "^4.4.3"
+  }
+}
