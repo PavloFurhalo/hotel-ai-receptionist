@@ -3,7 +3,7 @@ import fastifyFormBody from "@fastify/formbody";
 import fastifyWs from "@fastify/websocket";
 import { RealtimeSession } from "@openai/agents/realtime";
 import { TwilioRealtimeTransportLayer } from "@openai/agents-extensions";
-import { config, getMediaStreamUrl } from "./config.js";
+import { config, getMediaStreamUrl, voiceConfig } from "./config.js";
 import { receptionistAgent, realtimeSessionConfig } from "./agent.js";
 import {
   addError,
@@ -20,6 +20,11 @@ import {
   recordInterruption,
 } from "./call-logger.js";
 import { serializeReservationDraft } from "./reservation.js";
+import {
+  attachVoicePipeline,
+  isRecoverableVoiceError,
+  sendVoiceFallback,
+} from "./voice-pipeline.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -97,6 +102,10 @@ fastify.get("/health", async () => ({
   ok: true,
   service: "hotel-ai-receptionist",
   stage: "v1.2",
+  voice: {
+    vadEagerness: voiceConfig.vadEagerness,
+    outputSpeed: voiceConfig.outputSpeed,
+  },
 }));
 
 fastify.get("/calls", async () => listCalls());
@@ -177,6 +186,8 @@ fastify.register(async (app) => {
     });
     let finished = false;
     let session = null;
+    let voicePipeline = null;
+    let recoverableErrorCount = 0;
     const reservationDraftHolder = { draft: null };
 
     const safeFinish = async (status = "completed") => {
@@ -196,6 +207,23 @@ fastify.register(async (app) => {
       const payload = error?.error ?? error;
       request.log.error({ err: payload }, label);
       addError(call, payload);
+
+      if (
+        session &&
+        isRecoverableVoiceError(payload) &&
+        recoverableErrorCount < 2
+      ) {
+        recoverableErrorCount += 1;
+        const sent = sendVoiceFallback(session);
+        if (sent) {
+          voicePipeline?.markFallback?.();
+          request.log.warn(
+            { callSid: call.callSid, attempt: recoverableErrorCount },
+            "Recoverable voice error — sent spoken fallback"
+          );
+          return;
+        }
+      }
 
       try {
         session?.close?.();
@@ -223,6 +251,10 @@ fastify.register(async (app) => {
           // Outbound test calls: guest number is typically in `To`.
           guestPhoneHint: null,
         },
+      });
+
+      voicePipeline = attachVoicePipeline(session, call, {
+        logger: request.log,
       });
 
       // Prevent ERR_UNHANDLED_ERROR from crashing the process.
@@ -315,6 +347,7 @@ fastify.register(async (app) => {
 
       connection.on("close", () => {
         request.log.info({ callSid: call.callSid }, "Media stream WebSocket closed");
+        voicePipeline?.persistMetrics?.();
         safeFinish(call.errors.length > 0 ? "error" : "completed");
         try {
           session?.close?.();
@@ -325,8 +358,13 @@ fastify.register(async (app) => {
 
       session.connect({ apiKey: config.openaiApiKey }).then(
         () => {
+          voicePipeline?.onConnected?.();
           request.log.info(
-            { callSid: call.callSid },
+            {
+              callSid: call.callSid,
+              vadEagerness: voiceConfig.vadEagerness,
+              outputSpeed: voiceConfig.outputSpeed,
+            },
             "Connected to OpenAI Realtime API"
           );
         },

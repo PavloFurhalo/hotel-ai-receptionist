@@ -1,6 +1,7 @@
 import { RealtimeAgent, tool } from "@openai/agents/realtime";
 import { z } from "zod";
 import { hotelData, formatHotelKnowledgeForPrompt } from "./hotel-data.js";
+import { voiceConfig } from "./config.js";
 import {
   applyReservationDraftUpdate,
   createEmptyReservationDraft,
@@ -109,6 +110,14 @@ const SYSTEM_INSTRUCTIONS = `
 Підсумок перед підтвердженням. Якщо «Так, все вірно. А яка ціна?» — спочатку ціна, потім одне коротке підтвердження даних. Не дроби на дві репліки і не закінчуй дзвінок.
 Після confirmed_for_test розмова триває.
 
+ГОЛОС (ТЕЛЕФОН)
+- 1–2 короткі речення за репліку. Не монолог.
+- Якщо клієнт сказав коротко — відповідай коротко.
+- Використовуй крапки та коми для природних пауз TTS. Без штучних довгих пауз.
+- Спокійно, професійно, доброзичливо. Не поспішай і не надто емоційно.
+- Короткі backchannel («Так, звичайно.», «Зрозуміла.», «Одну хвилинку.») — лише коли це справді доречно, не кожну репліку.
+- Одну логічну відповідь — одним turn-ом. Не дроби без потреби.
+
 СТИЛЬ
 1–3 короткі речення. Без «звертайтеся», «якщо будуть питання», повторних пояснень.
 
@@ -138,13 +147,14 @@ export const realtimeSessionConfig = {
         },
         turnDetection: {
           type: "semantic_vad",
-          eagerness: "low",
+          eagerness: voiceConfig.vadEagerness,
           createResponse: true,
           interruptResponse: true,
         },
       },
       output: {
         voice: RECEPTIONIST_VOICE,
+        speed: voiceConfig.outputSpeed,
       },
     },
   },
