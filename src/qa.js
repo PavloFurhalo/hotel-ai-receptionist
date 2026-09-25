@@ -23,7 +23,9 @@ export function buildCallQa({
   reservationDraft = null,
   metadata = {},
   errors = [],
+  hotelConfig = null,
 } = {}) {
+  const hotel = hotelConfig || hotelData;
   const interruptions = metadata.interruptions || 0;
   const prematureResponses = detectPrematureAssistantReplies(transcript);
   const prematureFarewells = detectPrematureFarewells(transcript);
@@ -54,7 +56,7 @@ export function buildCallQa({
   let duplicateBookingCompletion = duplicateCompletions.length;
   let confirmationPlusQuestionIgnored = 0;
 
-  const knownPrices = Object.values(hotelData.rooms).map((r) => r.pricePerNight);
+  const knownPrices = Object.values(hotel.rooms || {}).map((r) => r.pricePerNight);
   const pricePattern = /(\d{3,5})\s*(грн|гривень|гривні)/gi;
 
   for (let i = 0; i < transcript.length; i += 1) {
@@ -65,8 +67,8 @@ export function buildCallQa({
         const price = Number(match[1]);
         if (
           !knownPrices.includes(price) &&
-          price !== hotelData.amenities.breakfast.price &&
-          price !== hotelData.amenities.parking.price
+          price !== hotel.amenities?.breakfast?.price &&
+          price !== hotel.amenities?.parking?.price
         ) {
           hallucinations += 1;
           issues.push(`Possible invented price in assistant reply: ${price}`);

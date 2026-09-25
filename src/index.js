@@ -4,7 +4,10 @@ import fastifyWs from "@fastify/websocket";
 import { RealtimeSession } from "@openai/agents/realtime";
 import { TwilioRealtimeTransportLayer } from "@openai/agents-extensions";
 import { config, getMediaStreamUrl, voiceConfig } from "./config.js";
-import { receptionistAgent, realtimeSessionConfig } from "./agent.js";
+import {
+  createReceptionistAgent,
+  realtimeSessionConfig,
+} from "./agent.js";
 import {
   addError,
   addTranscriptEntry,
@@ -25,6 +28,12 @@ import {
   isRecoverableVoiceError,
   sendVoiceFallback,
 } from "./voice-pipeline.js";
+import {
+  getHotelById,
+  listHotels,
+  listPhoneNumbers,
+  resolveHotelForCall,
+} from "./hotels/registry.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -98,15 +107,55 @@ function extractTwilioStartMeta(event) {
   };
 }
 
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function genericUnavailableTwiml() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="uk-UA">Перепрошую, цей номер зараз не налаштований для прийому дзвінків. Будь ласка, спробуйте пізніше.</Say>
+  <Hangup/>
+</Response>`;
+}
+
 fastify.get("/health", async () => ({
   ok: true,
   service: "hotel-ai-receptionist",
-  stage: "v1.2",
+  stage: "v1.3-multi-hotel",
+  hotels: listHotels().map((h) => h.id),
   voice: {
     vadEagerness: voiceConfig.vadEagerness,
     outputSpeed: voiceConfig.outputSpeed,
   },
+  allowHotelOverride: config.allowHotelOverride,
 }));
+
+fastify.get("/hotels", async () =>
+  listHotels({ includeInactive: true }).map((hotel) => ({
+    id: hotel.id,
+    status: hotel.status,
+    name: hotel.hotel?.name,
+    nameUk: hotel.hotel?.nameUk,
+    timezone: hotel.timezone,
+    defaultLanguage: hotel.defaultLanguage,
+  }))
+);
+
+fastify.get("/hotels/:id", async (request, reply) => {
+  const hotel = getHotelById(request.params.id, { allowInactive: true });
+  if (!hotel) {
+    return reply.status(404).send({ error: "Hotel not found" });
+  }
+  return hotel;
+});
+
+fastify.get("/phone-numbers", async () => listPhoneNumbers());
 
 fastify.get("/calls", async () => listCalls());
 
@@ -137,10 +186,44 @@ fastify.all("/incoming-call", async (request, reply) => {
   }
 
   const body = request.body || {};
+  const query = request.query || {};
   const callSid = body.CallSid || null;
   const from = body.From || null;
   const to = body.To || null;
   const direction = body.Direction || null;
+
+  // Dev/test only: ?hotelId=carpathian-resort (disabled unless allowHotelOverride).
+  const hotelIdOverride =
+    typeof query.hotelId === "string" && query.hotelId.trim()
+      ? query.hotelId.trim()
+      : null;
+
+  const resolution = resolveHotelForCall({
+    to,
+    from,
+    direction,
+    hotelIdOverride,
+    allowOverride: config.allowHotelOverride,
+  });
+
+  if (!resolution.ok) {
+    request.log.warn(
+      {
+        code: resolution.code,
+        to,
+        from,
+        direction,
+        hotelIdOverride,
+        allowHotelOverride: config.allowHotelOverride,
+      },
+      "Hotel resolution failed — generic unavailable response"
+    );
+
+    // Never fall back to another hotel.
+    return reply.type("text/xml").send(genericUnavailableTwiml());
+  }
+
+  const hotel = resolution.hotel;
 
   // Prefill metadata from the Twilio HTTP webhook.
   // The WebSocket may arrive separately; CallSid from stream "start" will link them.
@@ -151,36 +234,98 @@ fastify.all("/incoming-call", async (request, reply) => {
       from,
       to,
       direction,
+      hotelId: hotel.id,
+      hotelPhone: resolution.phoneNumber,
       metadata: {
         source: "incoming-call",
+        hotelConfig: hotel,
+        hotelResolution: {
+          viaOverride: Boolean(resolution.viaOverride),
+          phoneNumber: resolution.phoneNumber,
+        },
       },
     });
   } else {
-    mergeCallMetadata(call, { from, to, direction });
+    mergeCallMetadata(call, {
+      from,
+      to,
+      direction,
+      hotelId: hotel.id,
+      hotelPhone: resolution.phoneNumber,
+      metadata: {
+        hotelConfig: hotel,
+        hotelResolution: {
+          viaOverride: Boolean(resolution.viaOverride),
+          phoneNumber: resolution.phoneNumber,
+        },
+      },
+    });
   }
+
+  // Twilio Media Streams strips query strings from Stream URLs.
+  // Put hotelId in the path so it survives to the WebSocket upgrade.
+  const streamUrlWithHotel = `${streamUrl.replace(/\/$/, "")}/${encodeURIComponent(hotel.id)}`;
 
   const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="${streamUrl}" />
+    <Stream url="${escapeXml(streamUrlWithHotel)}">
+      <Parameter name="hotelId" value="${escapeXml(hotel.id)}" />
+    </Stream>
   </Connect>
 </Response>`;
 
   request.log.info(
-    { streamUrl, callSid },
+    {
+      streamUrl: streamUrlWithHotel,
+      callSid,
+      hotelId: hotel.id,
+      hotelName: hotel.hotel?.name,
+      viaOverride: Boolean(resolution.viaOverride),
+    },
     "Incoming call — opening media stream"
   );
   return reply.type("text/xml").send(twimlResponse);
 });
 
 fastify.register(async (app) => {
-  app.get("/media-stream", { websocket: true }, (connection, request) => {
-    request.log.info("Media stream WebSocket connected");
+  // hotelId is in the path because Twilio drops Stream URL query params.
+  app.get("/media-stream/:hotelId", { websocket: true }, (connection, request) => {
+    const hotelIdFromPath =
+      typeof request.params?.hotelId === "string"
+        ? decodeURIComponent(request.params.hotelId).trim()
+        : null;
+
+    request.log.info(
+      { hotelId: hotelIdFromPath },
+      "Media stream WebSocket connected"
+    );
+
+    // Hotel must already be resolved at /incoming-call and passed via stream URL path.
+    // Never invent or fall back to a different hotel here.
+    const hotel = hotelIdFromPath
+      ? getHotelById(hotelIdFromPath, { allowInactive: false })
+      : null;
+
+    if (!hotel) {
+      request.log.error(
+        { hotelIdFromPath },
+        "Media stream missing/invalid hotelId — closing"
+      );
+      try {
+        connection.close();
+      } catch {
+        // ignore
+      }
+      return;
+    }
 
     // Provisional log until Twilio stream "start" provides CallSid.
     let call = createCallLog({
+      hotelId: hotel.id,
       metadata: {
         source: "media-stream",
+        hotelConfig: hotel,
       },
       silent: true,
     });
@@ -243,12 +388,15 @@ fastify.register(async (app) => {
         twilioWebSocket: connection,
       });
 
+      // Per-call agent with hotel-scoped prompt. Same Realtime voice pipeline.
+      const receptionistAgent = createReceptionistAgent(hotel);
+
       session = new RealtimeSession(receptionistAgent, {
         transport,
         ...realtimeSessionConfig,
         context: {
           reservationDraftHolder,
-          // Outbound test calls: guest number is typically in `To`.
+          hotelId: hotel.id,
           guestPhoneHint: null,
         },
       });
@@ -285,6 +433,8 @@ fastify.register(async (app) => {
               from: call.from,
               to: call.to,
               direction: call.direction,
+              hotelId: call.hotelId || hotel.id,
+              hotelPhone: call.hotelPhone,
               metadata: call.metadata,
             });
             for (const entry of call.transcript) {
@@ -303,10 +453,26 @@ fastify.register(async (app) => {
           attachCallSid(call, startMeta.callSid);
         }
 
+        // Stream Parameter hotelId must match the session hotel (isolation check).
+        const paramHotelId = startMeta.customParameters?.hotelId || null;
+        if (paramHotelId && paramHotelId !== hotel.id) {
+          request.log.error(
+            { paramHotelId, sessionHotelId: hotel.id },
+            "hotelId mismatch between stream parameter and session — closing"
+          );
+          handleCallError(
+            new Error("Hotel ID mismatch on media stream"),
+            "Hotel isolation error"
+          );
+          return;
+        }
+
         mergeCallMetadata(call, {
+          hotelId: hotel.id,
           metadata: {
             streamSid: startMeta.streamSid,
             customParameters: startMeta.customParameters,
+            hotelConfig: hotel,
           },
         });
 
@@ -317,12 +483,17 @@ fastify.register(async (app) => {
             : call.from;
         if (session?.context?.context) {
           session.context.context.guestPhoneHint = guestPhoneHint || null;
+          session.context.context.hotelId = hotel.id;
         }
 
         announceCallStarted(call);
 
         request.log.info(
-          { callSid: call.callSid, streamSid: startMeta.streamSid },
+          {
+            callSid: call.callSid,
+            streamSid: startMeta.streamSid,
+            hotelId: hotel.id,
+          },
           "Twilio media stream started"
         );
       });
@@ -346,7 +517,10 @@ fastify.register(async (app) => {
       });
 
       connection.on("close", () => {
-        request.log.info({ callSid: call.callSid }, "Media stream WebSocket closed");
+        request.log.info(
+          { callSid: call.callSid, hotelId: call.hotelId },
+          "Media stream WebSocket closed"
+        );
         voicePipeline?.persistMetrics?.();
         safeFinish(call.errors.length > 0 ? "error" : "completed");
         try {
@@ -362,6 +536,8 @@ fastify.register(async (app) => {
           request.log.info(
             {
               callSid: call.callSid,
+              hotelId: hotel.id,
+              hotelName: hotel.hotel?.name,
               vadEagerness: voiceConfig.vadEagerness,
               outputSpeed: voiceConfig.outputSpeed,
             },
@@ -383,6 +559,9 @@ const start = async () => {
   try {
     await fastify.listen({ port: config.port, host: "0.0.0.0" });
     console.log(`Server listening on http://0.0.0.0:${config.port}`);
+    console.log(
+      `Hotels loaded: ${listHotels().map((h) => h.id).join(", ") || "(none)"}`
+    );
     if (!config.publicBaseUrl) {
       console.warn(
         "PUBLIC_BASE_URL is not set. Set it to your ngrok HTTPS URL before testing with Twilio."

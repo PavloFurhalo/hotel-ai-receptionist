@@ -27,6 +27,7 @@ import {
   RECEPTIONIST_VOICE,
   realtimeSessionConfig,
 } from "../src/agent.js";
+import { voiceConfig } from "../src/config.js";
 
 test("1. unclear ASR -> clarification, not hallucinated intent", () => {
   assert.equal(isUnclearSpeech("А підз'ю камузна можна?"), true);
@@ -287,7 +288,7 @@ test("QA flags real-call failure modes", () => {
 });
 
 test("V1.2 config unchanged", () => {
-  assert.equal(RECEPTIONIST_VOICE, "coral");
+  assert.equal(RECEPTIONIST_VOICE, voiceConfig.voice);
   assert.equal(realtimeSessionConfig.model, "gpt-realtime");
   assert.equal(
     realtimeSessionConfig.config.audio.input.transcription.language,
@@ -299,6 +300,6 @@ test("V1.2 config unchanged", () => {
   );
   assert.equal(
     realtimeSessionConfig.config.audio.input.turnDetection.eagerness,
-    "low"
+    voiceConfig.vadEagerness
   );
 });

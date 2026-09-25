@@ -1,0 +1,36 @@
+{
+  "id": "inactive-demo-hotel",
+  "status": "inactive",
+  "timezone": "Europe/Kyiv",
+  "defaultLanguage": "uk",
+  "createdAt": "2026-08-11T00:00:00.000Z",
+  "updatedAt": "2026-08-11T00:00:00.000Z",
+  "hotel": {
+    "name": "Inactive Demo Hotel",
+    "nameUk": "Неактивний демо-готель",
+    "city": "Lviv",
+    "cityUk": "Львів",
+    "address": "N/A",
+    "receptionHours": "closed"
+  },
+  "rooms": {},
+  "amenities": {},
+  "policies": {
+    "checkIn": "14:00",
+    "checkOut": "12:00",
+    "earlyCheckIn": "N/A",
+    "lateCheckOut": "N/A",
+    "children": "N/A",
+    "pets": "N/A",
+    "parking": "N/A",
+    "cancellation": "N/A"
+  },
+  "capabilities": {
+    "canProvideInfo": false,
+    "canCreateBooking": false,
+    "canCancelBooking": false,
+    "canCheckLiveAvailability": false,
+    "canTransferToHuman": false
+  },
+  "unknownTopics": []
+}

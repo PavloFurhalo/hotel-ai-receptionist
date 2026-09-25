@@ -66,12 +66,16 @@ export function createCallLog({
   from = null,
   to = null,
   direction = null,
+  hotelId = null,
+  hotelPhone = null,
   metadata = {},
   silent = false,
 } = {}) {
   const startedAt = nowIso();
   const call = {
     callSid,
+    hotelId,
+    hotelPhone,
     startedAt,
     endedAt: null,
     durationSeconds: 0,
@@ -112,6 +116,7 @@ export function announceCallStarted(call) {
   call._announced = true;
   console.log("\nCALL STARTED");
   console.log(`Call SID: ${call.callSid || "(pending)"}`);
+  if (call.hotelId) console.log(`Hotel ID: ${call.hotelId}`);
   if (call.from) console.log(`From: ${call.from}`);
   if (call.to) console.log(`To: ${call.to}`);
 }
@@ -147,6 +152,8 @@ export function mergeCallMetadata(call, patch = {}) {
   if (patch.from && !call.from) call.from = patch.from;
   if (patch.to && !call.to) call.to = patch.to;
   if (patch.direction && !call.direction) call.direction = patch.direction;
+  if (patch.hotelId) call.hotelId = patch.hotelId;
+  if (patch.hotelPhone) call.hotelPhone = patch.hotelPhone;
 
   if (patch.metadata && typeof patch.metadata === "object") {
     call.metadata = { ...call.metadata, ...patch.metadata };
@@ -228,6 +235,7 @@ export function formatReadableTranscript(call) {
   const transcript = sortTranscript(call.transcript || []);
   const lines = [
     `CALL SID: ${call.callSid || "unknown"}`,
+    `HOTEL ID: ${call.hotelId || ""}`,
     `STARTED: ${call.startedAt || ""}`,
     `ENDED: ${call.endedAt || ""}`,
     `FROM: ${call.from || ""}`,
@@ -293,6 +301,8 @@ export async function finishCall(call, { status = "completed" } = {}) {
 
   call.metadata = {
     ...call.metadata,
+    hotelId: call.hotelId || null,
+    hotelPhone: call.hotelPhone || null,
     interruptions: call.metadata.interruptions || 0,
     interruptionEvents: call.metadata.interruptionEvents || [],
     voiceState: call.metadata.voiceState || null,
@@ -311,10 +321,13 @@ export async function finishCall(call, { status = "completed" } = {}) {
     reservationDraft: call.reservationDraft,
     metadata: call.metadata,
     errors: call.errors,
+    hotelConfig: call.metadata.hotelConfig || null,
   });
 
   const serializable = {
     callSid: call.callSid,
+    hotelId: call.hotelId || null,
+    hotelPhone: call.hotelPhone || null,
     startedAt: call.startedAt,
     endedAt: call.endedAt,
     durationSeconds: call.durationSeconds,
@@ -331,7 +344,17 @@ export async function finishCall(call, { status = "completed" } = {}) {
     errors: call.errors,
     reservationDraft: call.reservationDraft ?? null,
     qa: call.qa,
-    metadata: call.metadata,
+    metadata: {
+      ...call.metadata,
+      // Avoid duplicating full hotel KB in every call log — keep summary only.
+      hotelConfig: call.metadata.hotelConfig
+        ? {
+            id: call.metadata.hotelConfig.id,
+            name: call.metadata.hotelConfig.hotel?.name,
+            nameUk: call.metadata.hotelConfig.hotel?.nameUk,
+          }
+        : null,
+    },
   };
 
   try {
@@ -387,6 +410,7 @@ export async function listCalls() {
       const data = JSON.parse(raw);
       calls.push({
         callSid: data.callSid,
+        hotelId: data.hotelId || null,
         startedAt: data.startedAt,
         endedAt: data.endedAt,
         durationSeconds: data.durationSeconds,

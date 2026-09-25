@@ -27,6 +27,7 @@ import {
   RECEPTIONIST_VOICE,
   realtimeSessionConfig,
 } from "../src/agent.js";
+import { voiceConfig } from "../src/config.js";
 
 test("V1.1 Test1: incomplete А... then booking intent", () => {
   assert.equal(isIncompleteUtterance("А..."), true);
@@ -223,7 +224,7 @@ test("V1.1 premature farewell after soft ack", () => {
 });
 
 test("V1.1 config unchanged", () => {
-  assert.equal(RECEPTIONIST_VOICE, "coral");
+  assert.equal(RECEPTIONIST_VOICE, voiceConfig.voice);
   assert.equal(realtimeSessionConfig.model, "gpt-realtime");
   assert.equal(
     realtimeSessionConfig.config.audio.input.transcription.model,
@@ -239,7 +240,7 @@ test("V1.1 config unchanged", () => {
   );
   assert.equal(
     realtimeSessionConfig.config.audio.input.turnDetection.eagerness,
-    "low"
+    voiceConfig.vadEagerness
   );
   assert.equal(detectPrematureAssistantReplies([]), 0);
 });

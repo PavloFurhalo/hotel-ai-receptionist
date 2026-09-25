@@ -167,6 +167,22 @@ export function summarizeTurnMetrics(turn) {
   };
 }
 
+function writeLog(logger, message) {
+  try {
+    if (logger && typeof logger.info === "function") {
+      logger.info(message);
+      return;
+    }
+    if (logger && typeof logger.log === "function") {
+      logger.log(message);
+      return;
+    }
+  } catch {
+    // never crash the call on logging
+  }
+  console.log(message);
+}
+
 export function logTurnSummary(turn, logger = console) {
   const summary = summarizeTurnMetrics(turn);
   if (!summary) return;
@@ -196,5 +212,5 @@ export function logTurnSummary(turn, logger = console) {
   if (summary.interrupted) lines.push("  (interrupted by caller)");
   if (summary.fallback) lines.push("  (fallback response)");
 
-  logger.log(lines.join("\n"));
+  writeLog(logger, lines.join("\n"));
 }

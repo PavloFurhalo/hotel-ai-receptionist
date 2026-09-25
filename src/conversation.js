@@ -5,6 +5,10 @@
 
 import { hotelData } from "./hotel-data.js";
 
+function unknownTopicsFor(hotelConfig = hotelData) {
+  return hotelConfig?.unknownTopics || hotelData?.unknownTopics || [];
+}
+
 const INCOMPLETE_UTTERANCES = [
   "а",
   "ем",
@@ -244,7 +248,7 @@ export function createConversationState() {
   };
 }
 
-export function detectTopic(text) {
+export function detectTopic(text, hotelConfig = hotelData) {
   const value = String(text || "").toLowerCase();
   if (/зарядк|електромоб|електрокар/.test(value)) return "ev_charging";
   if (/wi-?fi|вай-?фай|інтернет/.test(value)) return "wifi";
@@ -254,7 +258,9 @@ export function detectTopic(text) {
   if (/тварин|собак|кішк/.test(value)) return "pets";
   if (/ресторан|меню/.test(value)) return "restaurant";
   if (
-    hotelData.unknownTopics.some((topic) => value.includes(String(topic).toLowerCase()))
+    unknownTopicsFor(hotelConfig).some((topic) =>
+      value.includes(String(topic).toLowerCase())
+    )
   ) {
     return "unknown";
   }

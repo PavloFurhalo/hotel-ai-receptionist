@@ -27,6 +27,7 @@ import {
   RECEPTIONIST_VOICE,
   realtimeSessionConfig,
 } from "../src/agent.js";
+import { voiceConfig } from "../src/config.js";
 import { hotelData } from "../src/hotel-data.js";
 
 test("1. context handling: booking follow-up is booking intent, not pets", () => {
@@ -188,7 +189,7 @@ test("10. QA metrics detect premature replies and context jumps", () => {
 });
 
 test("config invariants for V1", () => {
-  assert.equal(RECEPTIONIST_VOICE, "coral");
+  assert.equal(RECEPTIONIST_VOICE, voiceConfig.voice);
   assert.equal(realtimeSessionConfig.model, "gpt-realtime");
   assert.equal(
     realtimeSessionConfig.config.audio.input.transcription.model,
@@ -204,8 +205,8 @@ test("config invariants for V1", () => {
   );
   assert.equal(
     realtimeSessionConfig.config.audio.input.turnDetection.eagerness,
-    "low"
+    voiceConfig.vadEagerness
   );
-  assert.equal(realtimeSessionConfig.config.audio.output.voice, "coral");
+  assert.equal(realtimeSessionConfig.config.audio.output.voice, voiceConfig.voice);
   assert.equal(detectPrematureAssistantReplies([]), 0);
 });

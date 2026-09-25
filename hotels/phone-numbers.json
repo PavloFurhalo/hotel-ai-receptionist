@@ -1,0 +1,29 @@
+[
+  {
+    "id": "pn_grand_twilio",
+    "hotelId": "grand-hotel-lviv",
+    "phoneNumber": "+14066294775",
+    "provider": "twilio",
+    "status": "active",
+    "createdAt": "2026-08-11T00:00:00.000Z",
+    "updatedAt": "2026-08-11T00:00:00.000Z"
+  },
+  {
+    "id": "pn_carpathian_test",
+    "hotelId": "carpathian-resort",
+    "phoneNumber": "+380000000002",
+    "provider": "test",
+    "status": "active",
+    "createdAt": "2026-08-11T00:00:00.000Z",
+    "updatedAt": "2026-08-11T00:00:00.000Z"
+  },
+  {
+    "id": "pn_inactive_demo",
+    "hotelId": "inactive-demo-hotel",
+    "phoneNumber": "+380000000099",
+    "provider": "test",
+    "status": "active",
+    "createdAt": "2026-08-11T00:00:00.000Z",
+    "updatedAt": "2026-08-11T00:00:00.000Z"
+  }
+]

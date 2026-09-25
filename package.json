@@ -1,7 +1,7 @@
 {
   "name": "hotel-ai-receptionist",
   "version": "0.1.0",
-  "description": "V1.2 Ukrainian hotel AI receptionist prototype (Twilio + OpenAI Realtime)",
+  "description": "V1.3 multi-hotel Ukrainian AI receptionist prototype (Twilio + OpenAI Realtime)",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test test/**/*.test.js"
+    "test": "node --test test/**/*.test.js",
+    "seed:hotels": "node scripts/seed-hotels.js"
   },
   "keywords": [
     "twilio",

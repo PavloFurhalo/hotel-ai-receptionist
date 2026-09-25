@@ -83,9 +83,10 @@ test("voice fallback uses response.create", () => {
   assert.match(events[0]?.response?.instructions, /затримка/i);
 });
 
-test("voice pipeline config defaults preserve conservative VAD", () => {
-  assert.equal(voiceConfig.vadEagerness, "low");
-  assert.equal(voiceConfig.outputSpeed, 0.95);
+test("voice pipeline config matches session", () => {
+  assert.ok(["low", "medium", "high", "auto"].includes(voiceConfig.vadEagerness));
+  assert.ok(voiceConfig.outputSpeed >= 0.25 && voiceConfig.outputSpeed <= 1.5);
+  assert.ok(typeof voiceConfig.voice === "string" && voiceConfig.voice.length > 0);
   assert.equal(
     realtimeSessionConfig.config.audio.input.turnDetection.type,
     "semantic_vad"
@@ -94,5 +95,10 @@ test("voice pipeline config defaults preserve conservative VAD", () => {
     realtimeSessionConfig.config.audio.input.turnDetection.interruptResponse,
     true
   );
-  assert.equal(realtimeSessionConfig.config.audio.output.speed, 0.95);
+  assert.equal(
+    realtimeSessionConfig.config.audio.input.turnDetection.eagerness,
+    voiceConfig.vadEagerness
+  );
+  assert.equal(realtimeSessionConfig.config.audio.output.speed, voiceConfig.outputSpeed);
+  assert.equal(realtimeSessionConfig.config.audio.output.voice, voiceConfig.voice);
 });

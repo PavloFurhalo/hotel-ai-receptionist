@@ -1,7 +1,11 @@
 import { RealtimeAgent, tool } from "@openai/agents/realtime";
 import { z } from "zod";
-import { hotelData, formatHotelKnowledgeForPrompt } from "./hotel-data.js";
 import { voiceConfig } from "./config.js";
+import {
+  buildSystemPrompt,
+  getHotelById,
+  formatHotelKnowledgeForPrompt,
+} from "./hotels/registry.js";
 import {
   applyReservationDraftUpdate,
   createEmptyReservationDraft,
@@ -11,10 +15,8 @@ import {
   serializeReservationDraft,
 } from "./reservation.js";
 
-const HOTEL_KNOWLEDGE = formatHotelKnowledgeForPrompt(hotelData);
-
-/** Warm professional female Realtime voice (supported GA catalog). */
-export const RECEPTIONIST_VOICE = "coral";
+/** Natural warm female Realtime voice (env: REALTIME_VOICE). */
+export const RECEPTIONIST_VOICE = voiceConfig.voice;
 
 const ASR_PROMPT = [
   "Ukrainian hotel reception phone call.",
@@ -74,62 +76,24 @@ const updateReservationDraftTool = tool({
   },
 });
 
-const SYSTEM_INSTRUCTIONS = `
-Ти — професійна адміністраторка готелю «${hotelData.hotel.nameUk}».
-Телефон українською. Говори тепло, спокійно, коротко. Не як чатбот.
-Розуміння важливіше за швидкість.
+/**
+ * Create a RealtimeAgent bound to one hotel configuration.
+ * Voice pipeline (tools / VAD / ASR) stays shared; prompt is hotel-scoped.
+ */
+export function createReceptionistAgent(hotelConfig) {
+  if (!hotelConfig?.id || !hotelConfig?.hotel?.nameUk) {
+    throw new Error("createReceptionistAgent requires a valid hotel config.");
+  }
 
-РІШЕННЯ НА КОЖНУ РЕПЛІКУ
-1) Чи зрозуміла репліка?
-2) Якщо так — визнач намір з контексту.
-3) Нова зрозуміла тема має пріоритет над незавершеним бронюванням.
-4) Короткий follow-up («А скільки?», «А після десяти?», «А дітям?») успадковує поточну тему.
-5) Якщо ASR неясний — не вгадуй. Краще: «Перепрошую, не зовсім вас зрозуміла. Можете повторити?»
-   Лише при дуже сильному контексті коротко підтверди здогадку: «Ви питаєте про SPA?»
-6) Не вигадуй сенс, щоб «заповнити паузу».
+  const instructions = buildSystemPrompt(hotelConfig);
 
-ТЕМА ≠ БРОНЮВАННЯ
-Бронювання живе в памʼяті. Поточна тема може бути SPA, парковка, сніданок, зарядка авто.
-Якщо клієнт питає про зарядку для електромобіля, поки не вистачає імені — відповідай про зарядку.
-НЕ кажи «Нам залишилося уточнити імʼя», поки клієнт не повернувся до бронювання або сам не назвав дані.
-Після відповіді на нову тему можна пізніше природно повернутися до відсутнього поля.
-
-НЕЯСНА МОВА ≠ НЕМАЄ ДАНИХ
-«А підзʼю камузна можна?» — уточнення, не «можна записатися на процедури».
-«Чи є більярд?» — зрозуміле питання без даних: «У моїх поточних даних немає цієї інформації, тому не хочу вас вводити в оману.»
-
-ВІТАННЯ / ПРОЩАННЯ
-Повний привіт — лише на старті. «Добрий день» / «Алло» посеред розмови: «Так, слухаю вас.» Без рестарту.
-«Добре», «Супер», «Дякую», «Ясно» — не прощання.
-«Дякую, а ще скажіть…» — відповідай на нове питання.
-Прощайся лише після явного завершення.
-
-БРОНЮВАННЯ
-Питай 1–2 відсутні поля. Кілька даних в одній фразі — витягни всі. Останнє явне виправлення перемагає.
-Після кожного оновлення викликай update_reservation_draft.
-Підсумок перед підтвердженням. Якщо «Так, все вірно. А яка ціна?» — спочатку ціна, потім одне коротке підтвердження даних. Не дроби на дві репліки і не закінчуй дзвінок.
-Після confirmed_for_test розмова триває.
-
-ГОЛОС (ТЕЛЕФОН)
-- 1–2 короткі речення за репліку. Не монолог.
-- Якщо клієнт сказав коротко — відповідай коротко.
-- Використовуй крапки та коми для природних пауз TTS. Без штучних довгих пауз.
-- Спокійно, професійно, доброзичливо. Не поспішай і не надто емоційно.
-- Короткі backchannel («Так, звичайно.», «Зрозуміла.», «Одну хвилинку.») — лише коли це справді доречно, не кожну репліку.
-- Одну логічну відповідь — одним turn-ом. Не дроби без потреби.
-
-СТИЛЬ
-1–3 короткі речення. Без «звертайтеся», «якщо будуть питання», повторних пояснень.
-
-${HOTEL_KNOWLEDGE}
-`.trim();
-
-export const receptionistAgent = new RealtimeAgent({
-  name: "Carpathian Grand Receptionist",
-  instructions: SYSTEM_INSTRUCTIONS,
-  voice: RECEPTIONIST_VOICE,
-  tools: [updateReservationDraftTool],
-});
+  return new RealtimeAgent({
+    name: `${hotelConfig.hotel.name} Receptionist`,
+    instructions,
+    voice: RECEPTIONIST_VOICE,
+    tools: [updateReservationDraftTool],
+  });
+}
 
 /**
  * Supported by @openai/agents-realtime 0.14.3.
@@ -160,5 +124,16 @@ export const realtimeSessionConfig = {
   },
 };
 
-// Re-export for tests/tools that want extraction without prompting duplication.
+/** Default hotel for backward-compatible unit tests. */
+export function getDefaultHotelConfig() {
+  return getHotelById("grand-hotel-lviv");
+}
+
+/**
+ * @deprecated Prefer createReceptionistAgent(hotelConfig) per call.
+ * Kept for older tests that import a singleton.
+ */
+export const receptionistAgent = createReceptionistAgent(getDefaultHotelConfig());
+
+export { buildSystemPrompt, formatHotelKnowledgeForPrompt };
 export { extractReservationFieldsFromText };

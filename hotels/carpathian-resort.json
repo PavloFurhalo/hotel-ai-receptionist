@@ -1,0 +1,102 @@
+{
+  "id": "carpathian-resort",
+  "status": "active",
+  "timezone": "Europe/Kyiv",
+  "defaultLanguage": "uk",
+  "createdAt": "2026-08-11T00:00:00.000Z",
+  "updatedAt": "2026-08-11T00:00:00.000Z",
+  "hotel": {
+    "name": "Carpathian Resort",
+    "nameUk": "Карпатський Резорт",
+    "city": "Yaremche",
+    "cityUk": "Яремче",
+    "address": "вул. Свободи 45, Яремче, Україна",
+    "receptionHours": "24/7"
+  },
+  "rooms": {
+    "standard": {
+      "name": "Стандартний",
+      "nameEn": "Standard",
+      "pricePerNight": 2500,
+      "currency": "UAH",
+      "maxGuests": 2,
+      "description": "Затишний номер з видом на гори.",
+      "included": ["проживання", "Wi-Fi"]
+    },
+    "deluxe": {
+      "name": "Делюкс",
+      "nameEn": "Deluxe",
+      "pricePerNight": 3800,
+      "currency": "UAH",
+      "maxGuests": 2,
+      "description": "Просторий номер з балконом і видом на Карпати.",
+      "included": ["проживання", "Wi-Fi"]
+    },
+    "family": {
+      "name": "Сімейний",
+      "nameEn": "Family",
+      "pricePerNight": 5200,
+      "currency": "UAH",
+      "maxGuests": 4,
+      "description": "Сімейний номер з двома додатковими місцями.",
+      "included": ["проживання", "Wi-Fi"]
+    }
+  },
+  "amenities": {
+    "wifi": {
+      "available": true,
+      "description": "Безкоштовний Wi-Fi у номерах і громадських зонах."
+    },
+    "breakfast": {
+      "available": true,
+      "description": "Сніданок оплачується окремо, не входить у вартість номера.",
+      "hours": "07:30–10:30",
+      "price": 450,
+      "currency": "UAH"
+    },
+    "parking": {
+      "available": true,
+      "description": "Закрите паркування на території готелю. Місця обмежені.",
+      "price": 200,
+      "currency": "UAH",
+      "unit": "за добу"
+    },
+    "restaurant": {
+      "available": true,
+      "description": "Ресторан у готелі.",
+      "hours": "12:00–23:00"
+    },
+    "spa": {
+      "available": true,
+      "description": "SPA-зона в готелі.",
+      "hours": "10:00–22:00"
+    }
+  },
+  "policies": {
+    "checkIn": "15:00",
+    "checkOut": "11:00",
+    "earlyCheckIn": "Можливість раннього заїзду залежить від наявності; у цьому прототипі точних умов немає.",
+    "lateCheckOut": "Можливість пізнього виїзду залежить від наявності; у цьому прототипі точних умов немає.",
+    "children": "Діти до 6 років розміщуються безкоштовно без додаткового ліжка. Дитяче ліжко — 300 грн за ніч (за запитом).",
+    "pets": "Домашні тварини не дозволені.",
+    "parking": "Паркування доступне за 200 грн на добу. Місця обмежені.",
+    "cancellation": "Безкоштовне скасування до 14:00 за день до заїзду. Пізніше — стягується вартість однієї ночі."
+  },
+  "capabilities": {
+    "canProvideInfo": true,
+    "canCreateBooking": false,
+    "canCancelBooking": false,
+    "canCheckLiveAvailability": false,
+    "canTransferToHuman": false
+  },
+  "unknownTopics": [
+    "більярд",
+    "басейн",
+    "сауна",
+    "тренажерний зал",
+    "трансфер",
+    "пральня",
+    "бар",
+    "зарядка для електромобіля"
+  ]
+}

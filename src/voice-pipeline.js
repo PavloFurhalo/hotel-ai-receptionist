@@ -66,9 +66,9 @@ export function attachVoicePipeline(session, call, { logger = console } = {}) {
   const transition = (next, reason) => {
     const result = stateMachine.transition(next, reason);
     if (!result.ok && voiceConfig.debugState) {
-      logger.warn(
-        `[voice-state] rejected ${result.from} → ${result.to} (${reason})`
-      );
+      const msg = `[voice-state] rejected ${result.from} → ${result.to} (${reason})`;
+      if (typeof logger?.warn === "function") logger.warn(msg);
+      else console.warn(msg);
     }
     return result;
   };
